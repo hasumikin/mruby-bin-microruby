@@ -379,7 +379,7 @@ MRB_API mrb_value
 mrb_load_string(mrb_state *mrb, const char *str)
 {
   mrb_value ret;
-  StreamInterface *si = StreamInterface_new((char *)str, STREAM_TYPE_MEMORY);
+  StreamInterface *si = StreamInterface_new(NULL, (char *)str, STREAM_TYPE_MEMORY);
   ParserState *p = Compiler_parseInitState(si->node_box_size);
   if (Compiler_compile(p, si)) {
     mrb_load_irep(mrb, p->scope->vm_code);
