@@ -7,12 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <mruby/array.h>
-//#include <mruby/compile.h>
-//#include <mruby/dump.h>
 #include <mruby/variable.h>
-//#include <mruby/proc.h>
 
 #include <picorbc.h>
+#include <context.h>
+#include <mrb_state/misc.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 # include <io.h> /* for setmode */
@@ -264,151 +263,7 @@ cleanup(mrb_state *mrb, struct _args *args)
   mrb_close(mrb);
 }
 
-
-struct mrb_parser_state;
-
-/* from compile.h */
-typedef struct mrbc_context {
-  mrb_sym *syms;
-  int slen;
-  char *filename;
-  uint16_t lineno;
-  int (*partial_hook)(struct mrb_parser_state*);
-  void *partial_data;
-  struct RClass *target_class;
-  mrb_bool capture_errors:1;
-  mrb_bool dump_result:1;
-  mrb_bool no_exec:1;
-  mrb_bool keep_lv:1;
-  mrb_bool no_optimize:1;
-  const struct RProc *upper;
-
-  size_t parser_nerr;
-} mrbc_context;
-
-/* from parse.y */
-MRB_API const char*
-mrbc_filename(mrb_state *mrb, mrbc_context *c, const char *s)
-{
-  if (s) {
-    size_t len = strlen(s);
-    char *p = (char *)mrb_malloc(mrb, len + 1);
-
-    memcpy(p, s, len + 1);
-    if (c->filename) {
-      mrb_free(mrb, c->filename);
-    }
-    c->filename = p;
-  }
-  return c->filename;
-}
-
-/* from parse.y */
-MRB_API mrbc_context*
-mrbc_context_new(mrb_state *mrb)
-{
-  return (mrbc_context *)mrb_calloc(mrb, 1, sizeof(mrbc_context));
-}
-
-/* from parse.y */
-MRB_API void
-mrbc_context_free(mrb_state *mrb, mrbc_context *cxt)
-{
-  mrb_free(mrb, cxt->filename);
-  mrb_free(mrb, cxt->syms);
-  mrb_free(mrb, cxt);
-}
-
-/* from proc.h */
-struct REnv {
-  MRB_OBJECT_HEADER;
-  mrb_value *stack;
-  struct mrb_context *cxt;
-  mrb_sym mid;
-};
-
-/* from proc.h */
-static inline struct REnv *
-mrb_vm_ci_env(const mrb_callinfo *ci)
-{
-  if (ci->u.env && ci->u.env->tt == MRB_TT_ENV) {
-    return ci->u.env;
-  }
-  else {
-    return NULL;
-  }
-}
-
-/* from proc.h */
-static inline void
-mrb_vm_ci_env_set(mrb_callinfo *ci, struct REnv *e)
-{
-  if (ci->u.env) {
-    if (ci->u.env->tt == MRB_TT_ENV) {
-      if (e) {
-        e->c = ci->u.env->c;
-        ci->u.env = e;
-      }
-      else {
-        ci->u.target_class = ci->u.env->c;
-      }
-    }
-    else {
-      if (e) {
-        e->c = ci->u.target_class;
-        ci->u.env = e;
-      }
-    }
-  }
-  else {
-    ci->u.env = e;
-  }
-}
-
-/* from proc.h */
-void mrb_env_unshare(mrb_state*, struct REnv*);
-
-
-
-
-MRB_API mrb_value mrb_load_irep(mrb_state *mrb, const uint8_t *bin);
-
 int loglevel = 1;
-
-MRB_API mrb_value
-mrb_load_string(mrb_state *mrb, const char *str)
-{
-  mrb_value ret;
-  StreamInterface *si = StreamInterface_new(NULL, (char *)str, STREAM_TYPE_MEMORY);
-  ParserState *p = Compiler_parseInitState(si->node_box_size);
-  if (Compiler_compile(p, si)) {
-    mrb_load_irep(mrb, p->scope->vm_code);
-  } else {
-  }
-  return ret;
-}
-
-MRB_API mrb_value
-mrb_load_string_cxt(mrb_state *mrb, const char *s, mrbc_context *c)
-{
-  //return mrb_load_nstring_cxt(mrb, s, strlen(s), c);
-  return mrb_load_string(mrb, s);
-}
-
-/* from parse.y */
-MRB_API void
-mrbc_cleanup_local_variables(mrb_state *mrb, mrbc_context *c)
-{
-  if (c->syms) {
-    mrb_free(mrb, c->syms);
-    c->syms = NULL;
-    c->slen = 0;
-  }
-}
-
-
-
-
 
 int
 main(int argc, char **argv)
@@ -418,7 +273,7 @@ main(int argc, char **argv)
   int i;
   struct _args args;
   mrb_value ARGV;
-  mrbc_context *c;
+  picorbc_context *c;
   mrb_value v;
   mrb_sym zero_sym;
 
@@ -445,7 +300,7 @@ main(int argc, char **argv)
     mrb_define_global_const(mrb, "ARGV", ARGV);
     mrb_gv_set(mrb, mrb_intern_lit(mrb, "$DEBUG"), mrb_bool_value(args.debug));
 
-    c = mrbc_context_new(mrb);
+    c = picorbc_context_new();
     if (args.verbose)
       c->dump_result = TRUE;
     if (args.check_syntax)
@@ -456,11 +311,11 @@ main(int argc, char **argv)
     if (args.rfp) {
       const char *cmdline;
       cmdline = args.cmdline ? args.cmdline : "-";
-      mrbc_filename(mrb, c, cmdline);
+      picorbc_filename(c, cmdline);
       mrb_gv_set(mrb, zero_sym, mrb_str_new_cstr(mrb, cmdline));
     }
     else {
-      mrbc_filename(mrb, c, "-e");
+      picorbc_filename(c, "-e");
       mrb_gv_set(mrb, zero_sym, mrb_str_new_lit(mrb, "-e"));
     }
 
@@ -470,40 +325,43 @@ main(int argc, char **argv)
       FILE *lfp = fopen(args.libv[i], "rb");
       if (lfp == NULL) {
         fprintf(stderr, "%s: Cannot open library file: %s\n", *argv, args.libv[i]);
-        mrbc_context_free(mrb, c);
+        picorbc_context_free(c);
         cleanup(mrb, &args);
         return EXIT_FAILURE;
       }
       if (args.mrbfile) {
-//        v = mrb_load_irep_file_cxt(mrb, lfp, c);
+//      load.c
+        v = mrb_load_irep_file_cxt(mrb, lfp, c);
       }
       else {
+//      parse.y
 //        v = mrb_load_detect_file_cxt(mrb, lfp, c);
       }
       fclose(lfp);
       e = mrb_vm_ci_env(mrb->c->cibase);
       mrb_vm_ci_env_set(mrb->c->cibase, NULL);
       mrb_env_unshare(mrb, e);
-      mrbc_cleanup_local_variables(mrb, c);
+      picorbc_cleanup_local_variables(c);
     }
 
     /* Load program */
     if (args.mrbfile) {
-//      v = mrb_load_irep_file_cxt(mrb, args.rfp, c);
+//      load.c
+      v = mrb_load_irep_file_cxt(mrb, args.rfp, c);
     }
     else if (args.rfp) {
+//      parse.y
 //      v = mrb_load_detect_file_cxt(mrb, args.rfp, c);
     }
     else {
       char* utf8 = mrb_utf8_from_locale(args.cmdline, -1);
       if (!utf8) abort();
-//      v = mrb_load_string_cxt(mrb, utf8, c);
-v = mrb_load_string(mrb, utf8);
+      v = mrb_load_string_cxt(mrb, utf8, c);
       mrb_utf8_free(utf8);
     }
 
     mrb_gc_arena_restore(mrb, ai);
-    mrbc_context_free(mrb, c);
+    picorbc_context_free(c);
     if (mrb->exc) {
       if (!mrb_undef_p(v)) {
         mrb_print_error(mrb);
