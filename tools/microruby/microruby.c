@@ -336,6 +336,7 @@ main(int argc, char **argv)
       else {
 //      parse.y
 //        v = mrb_load_detect_file_cxt(mrb, lfp, c);
+        v = picorb_load_detect_file_cxt(mrb, lfp, c);
       }
       fclose(lfp);
       e = mrb_vm_ci_env(mrb->c->cibase);
@@ -352,11 +353,12 @@ main(int argc, char **argv)
     else if (args.rfp) {
 //      parse.y
 //      v = mrb_load_detect_file_cxt(mrb, args.rfp, c);
+      v = picorb_load_detect_file_cxt(mrb, args.rfp, c);
     }
     else {
       char* utf8 = mrb_utf8_from_locale(args.cmdline, -1);
       if (!utf8) abort();
-      v = mrb_load_string_cxt(mrb, utf8, c);
+      v = picorb_load_string_cxt(mrb, utf8, c);
       mrb_utf8_free(utf8);
     }
 
