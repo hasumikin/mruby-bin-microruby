@@ -330,12 +330,9 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
       }
       if (args.mrbfile) {
-//      load.c
         v = mrb_load_irep_file_cxt(mrb, lfp, c);
       }
       else {
-//      parse.y
-//        v = mrb_load_detect_file_cxt(mrb, lfp, c);
         v = microrb_load_detect_file_cxt(mrb, lfp, c);
       }
       fclose(lfp);
@@ -347,12 +344,9 @@ main(int argc, char **argv)
 
     /* Load program */
     if (args.mrbfile) {
-//      load.c
       v = mrb_load_irep_file_cxt(mrb, args.rfp, c);
     }
     else if (args.rfp) {
-//      parse.y
-//      v = mrb_load_detect_file_cxt(mrb, args.rfp, c);
       v = microrb_load_detect_file_cxt(mrb, args.rfp, c);
     }
     else {
