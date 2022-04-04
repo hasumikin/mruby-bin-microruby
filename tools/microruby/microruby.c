@@ -273,7 +273,7 @@ main(int argc, char **argv)
   int i;
   struct _args args;
   mrb_value ARGV;
-  picorbc_context *c;
+  picorbc_context *cxt;
   mrb_value v;
   mrb_sym zero_sym;
 
@@ -300,22 +300,22 @@ main(int argc, char **argv)
     mrb_define_global_const(mrb, "ARGV", ARGV);
     mrb_gv_set(mrb, mrb_intern_lit(mrb, "$DEBUG"), mrb_bool_value(args.debug));
 
-    c = picorbc_context_new();
+    cxt = picorbc_context_new();
     if (args.verbose)
-      c->dump_result = TRUE;
+      cxt->dump_result = TRUE;
     if (args.check_syntax)
-      c->no_exec = TRUE;
+      cxt->no_exec = TRUE;
 
     /* Set $0 */
     zero_sym = mrb_intern_lit(mrb, "$0");
     if (args.rfp) {
       const char *cmdline;
       cmdline = args.cmdline ? args.cmdline : "-";
-      picorbc_filename(c, cmdline);
+      picorbc_filename(cxt, cmdline);
       mrb_gv_set(mrb, zero_sym, mrb_str_new_cstr(mrb, cmdline));
     }
     else {
-      picorbc_filename(c, "-e");
+      picorbc_filename(cxt, "-e");
       mrb_gv_set(mrb, zero_sym, mrb_str_new_lit(mrb, "-e"));
     }
 
@@ -325,39 +325,39 @@ main(int argc, char **argv)
       FILE *lfp = fopen(args.libv[i], "rb");
       if (lfp == NULL) {
         fprintf(stderr, "%s: Cannot open library file: %s\n", *argv, args.libv[i]);
-        picorbc_context_free(c);
+        picorbc_context_free(cxt);
         cleanup(mrb, &args);
         return EXIT_FAILURE;
       }
       if (args.mrbfile) {
-        v = mrb_load_irep_file_cxt(mrb, lfp, c);
+        v = mrb_load_irep_file_cxt(mrb, lfp, cxt);
       }
       else {
-        v = microrb_load_detect_file_cxt(mrb, lfp, c);
+        v = microrb_load_detect_file_cxt(mrb, lfp, cxt);
       }
       fclose(lfp);
       e = mrb_vm_ci_env(mrb->c->cibase);
       mrb_vm_ci_env_set(mrb->c->cibase, NULL);
       mrb_env_unshare(mrb, e);
-      picorbc_cleanup_local_variables(c);
+      picorbc_cleanup_local_variables(cxt);
     }
 
     /* Load program */
     if (args.mrbfile) {
-      v = mrb_load_irep_file_cxt(mrb, args.rfp, c);
+      v = mrb_load_irep_file_cxt(mrb, args.rfp, cxt);
     }
     else if (args.rfp) {
-      v = microrb_load_detect_file_cxt(mrb, args.rfp, c);
+      v = microrb_load_detect_file_cxt(mrb, args.rfp, cxt);
     }
     else {
       char* utf8 = mrb_utf8_from_locale(args.cmdline, -1);
       if (!utf8) abort();
-      v = microrb_load_string_cxt(mrb, utf8, c);
+      v = microrb_load_string_cxt(mrb, utf8, cxt);
       mrb_utf8_free(utf8);
     }
 
     mrb_gc_arena_restore(mrb, ai);
-    picorbc_context_free(c);
+    picorbc_context_free(cxt);
     if (mrb->exc) {
       if (!mrb_undef_p(v)) {
         mrb_print_error(mrb);
